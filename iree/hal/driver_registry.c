@@ -38,6 +38,9 @@
 struct iree_hal_driver_registry_s {
   iree_slim_mutex_t mutex;
 
+  // The allocator used to create storage for this structure.
+  iree_allocator_t allocator;
+
   // Factories in registration order. As factories are unregistered the list is
   // shifted to be kept dense.
   iree_host_size_t factory_count;
@@ -58,6 +61,39 @@ iree_hal_driver_registry_default() {
   iree_call_once(&iree_hal_driver_registry_default_flag_,
                  iree_hal_driver_registry_default_initialize);
   return &iree_hal_driver_registry_default_;
+}
+
+// Creates and initializes an empty device driver registry
+IREE_API_EXPORT iree_status_t IREE_API_CALL iree_hal_driver_registry_allocate(
+    iree_allocator_t allocator, iree_hal_driver_registry_t** out_registry) {
+  IREE_TRACE_ZONE_BEGIN(z0);
+  IREE_RETURN_AND_END_ZONE_IF_ERROR(
+      z0, iree_allocator_malloc(allocator, sizeof(iree_hal_driver_registry_t),
+                                (void**)out_registry));
+
+  (*out_registry)->allocator = allocator;
+  iree_slim_mutex_initialize(&((*out_registry)->mutex));
+
+  IREE_TRACE_ZONE_END(z0);
+  return iree_ok_status();
+}
+
+IREE_API_EXPORT void IREE_API_CALL
+iree_hal_driver_registry_free(iree_hal_driver_registry_t* registry) {
+  IREE_ASSERT_ARGUMENT(registry);
+  IREE_TRACE_ZONE_BEGIN(z0);
+
+  // Unregister each factory.
+  // Work from the tail because the unregister mutates the list and count
+  while (registry->factory_count > 0) {
+    IREE_IGNORE_ERROR(iree_hal_driver_registry_unregister_factory(
+        registry, registry->factories[registry->factory_count - 1]));
+  }
+
+  iree_slim_mutex_deinitialize(&registry->mutex);
+  iree_allocator_free(registry->allocator, registry);
+
+  IREE_TRACE_ZONE_END(z0);
 }
 
 IREE_API_EXPORT iree_status_t IREE_API_CALL
