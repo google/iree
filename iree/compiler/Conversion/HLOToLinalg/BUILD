@@ -21,6 +21,7 @@ package(
 cc_library(
     name = "HLOToLinalgOnTensors",
     srcs = [
+        "BroadcastingToLinalgPatterns.cpp",
         "FusionOfTensorOps.cpp",
         "HLOToLinalgOnTensors.cpp",
     ],
@@ -28,6 +29,7 @@ cc_library(
         "HLOToLinalgOnTensorPasses.h",
     ],
     deps = [
+        "//iree/compiler/Dialect/Flow/Conversion/HLOToFlow",
         "//iree/compiler/Dialect/Flow/IR",
         "//iree/compiler/Dialect/HAL/IR",
         "//iree/compiler/Dialect/HAL/IR:HALDialect",

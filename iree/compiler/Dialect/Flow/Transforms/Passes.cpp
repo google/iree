@@ -63,59 +63,27 @@ namespace IREE {
 namespace Flow {
 
 // Prepare HLO for use as an input to the Flow dialect.
-//
-// HACK: this needs to be moved into the various tensorflow-specific import
-// tools so that none of this code pulls in HLO. Today we still have
-// dependencies on HLO for the legacy non-linalg-on-tensors path so it's fine
-// here, but soon we'll be shifting away from that and only accepting upstream
-// dialects like linalg.
-static void buildHLOInputTransformPassPipeline(OpPassManager &passManager) {
-  passManager.addNestedPass<FuncOp>(
-      IREE::Flow::createHLOToHLOPreprocessingPass());
-
-  // Run passes to remove shape constraints. HLO lowering inserts them, but they
-  // are not desired here.
-  passManager.addNestedPass<FuncOp>(mlir::createRemoveShapeConstraintsPass());
-}
-
-// Prepare TOSA for use as an input to the Flow dialect.
-static void buildTOSAInputTransformPassPipeline(OpPassManager &passManager) {
-  passManager.addNestedPass<FuncOp>(tosa::createTosaToSCF());
-  passManager.addNestedPass<FuncOp>(tosa::createTosaToStandard());
-  passManager.addNestedPass<FuncOp>(tosa::createTosaToLinalgOnTensors());
-}
-
-void buildInputTransformPassPipeline(OpPassManager &passManager) {
-  buildHLOInputTransformPassPipeline(passManager);
-  buildTOSAInputTransformPassPipeline(passManager);
-  passManager.addPass(createCanonicalizerPass());
-}
-
-void registerInputTransformPassPipeline() {
-  PassPipelineRegistration<> transformPassPipeline(
-      "iree-input-transformation-pipeline",
-      "Runs the full IREE flow dialect transformation pipeline",
-      [](OpPassManager &passManager) {
-        buildInputTransformPassPipeline(passManager);
-      });
-}
-
-void buildFlowTransformPassPipeline(OpPassManager &passManager) {
-  //----------------------------------------------------------------------------
-  // Entry dialect cleanup
-  //----------------------------------------------------------------------------
-
+void buildMHLOInputTransformPassPipeline(OpPassManager &passManager) {
   // Currently we don't handle SCF ops well and have to convert them all to CFG.
   // In the future it would be nice if we could have all of flow be both scf
   // and cfg compatible.
+  // TODO: Currently recurses into SCF in Linalg generic - with hilarity.
   passManager.addNestedPass<FuncOp>(mlir::createLowerToCFGPass());
+
+  // TODO: Rename/strip down this pass. It is really just hoisting any
+  // tensor.extract introduced in SCF conversion to flow.tensor.load (host
+  // read-back).
+  passManager.addNestedPass<FuncOp>(createPrePartitioningConversionPass());
 
   // We also don't handle calls well on the old codepath; until we remove the
   // use of the CFG we can continue inlining.
   passManager.addPass(mlir::createInlinerPass());
 
-  // Convert `shape` dialect to `shapex` dialect.
-  passManager.addPass(Shape::createConvertShapeToShapexPass());
+  passManager.addNestedPass<FuncOp>(
+      IREE::Flow::createHLOToHLOPreprocessingPass());
+
+  passManager.addNestedPass<FuncOp>(
+      mlir::iree_compiler::IREE::Flow::createHLOToHLOPreprocessingPass());
 
   // Perform initial cleanup.
   passManager.addNestedPass<FuncOp>(mlir::createCanonicalizerPass());
@@ -126,7 +94,93 @@ void buildFlowTransformPassPipeline(OpPassManager &passManager) {
   // TODO(nicolasvasilache): createLegalizeInputTypesPass is old and does not
   // handle region conversion properly (parent cloned before children). Revisit
   // when using ops with regions such as scf.for and linalg.generic.
-  passManager.addPass(IREE::Flow::createLegalizeInputTypesPass());
+  passManager.addPass(
+      mlir::iree_compiler::IREE::Flow::createLegalizeInputTypesPass());
+
+  // Convert to Linalg. After this point, HLO will be eliminated.
+  passManager.addNestedPass<FuncOp>(
+      mlir::iree_compiler::createHLOToLinalgOnTensorsPass(true));
+
+  // Note that some MHLO ops are left by the above and must resolve via
+  // canonicalization. See comments in the above pass and find a better way.
+  passManager.addNestedPass<FuncOp>(mlir::createCanonicalizerPass());
+
+  // Run passes to remove shape constraints. HLO lowering inserts them, but they
+  // are not desired here.
+  // passManager.addNestedPass<FuncOp>(mlir::createRemoveShapeConstraintsPass());
+}
+
+// Prepare TOSA for use as an input to the Flow dialect.
+void buildTOSAInputTransformPassPipeline(OpPassManager &passManager) {
+  passManager.addNestedPass<FuncOp>(tosa::createTosaToSCF());
+
+  // Currently we don't handle SCF ops well and have to convert them all to CFG.
+  // In the future it would be nice if we could have all of flow be both scf
+  // and cfg compatible.
+  // TODO: Currently recurses into SCF in Linalg generic - with hilarity.
+  passManager.addNestedPass<FuncOp>(mlir::createLowerToCFGPass());
+
+  // TODO: Rename/strip down this pass. It is really just hoisting any
+  // tensor.extract introduced in SCF conversion to flow.tensor.load (host
+  // read-back).
+  passManager.addNestedPass<FuncOp>(createPrePartitioningConversionPass());
+
+  // We also don't handle calls well on the old codepath; until we remove the
+  // use of the CFG we can continue inlining.
+  passManager.addPass(mlir::createInlinerPass());
+
+  passManager.addNestedPass<FuncOp>(tosa::createTosaToStandard());
+  passManager.addNestedPass<FuncOp>(tosa::createTosaToLinalgOnTensors());
+  passManager.addNestedPass<FuncOp>(mlir::createCanonicalizerPass());
+}
+
+void registerInputTransformPassPipeline() {
+  PassPipelineRegistration<> tosa(
+      "iree-tosa-input-transformation-pipeline",
+      "Runs the TOSA IREE flow dialect transformation pipeline",
+      [](OpPassManager &passManager) {
+        buildTOSAInputTransformPassPipeline(passManager);
+      });
+  PassPipelineRegistration<> mhlo(
+      "iree-mhlo-input-transformation-pipeline",
+      "Runs the MHLO IREE flow dialect transformation pipeline",
+      [](OpPassManager &passManager) {
+        buildMHLOInputTransformPassPipeline(passManager);
+      });
+}
+
+void buildFlowTransformPassPipeline(OpPassManager &passManager) {
+  //----------------------------------------------------------------------------
+  // Entry dialect cleanup
+  //----------------------------------------------------------------------------
+  passManager.addPass(createVerifyCompilerInputLegality());
+
+  // Currently we don't handle SCF ops well and have to convert them all to CFG.
+  // In the future it would be nice if we could have all of flow be both scf
+  // and cfg compatible.
+  // TODO: Currently recurses into SCF in Linalg generic - with hilarity.
+  // passManager.addNestedPass<FuncOp>(mlir::createLowerToCFGPass());
+
+  // We also don't handle calls well on the old codepath; until we remove the
+  // use of the CFG we can continue inlining.
+  // passManager.addPass(mlir::createInlinerPass());
+
+  // Convert `shape` dialect to `shapex` dialect.
+  // passManager.addPass(Shape::createConvertShapeToShapexPass());
+
+  // Perform initial cleanup.
+  // NOTE: There is no principled reason to be doing this here. But also ensures
+  // some consistency at the tool boundary.
+  passManager.addNestedPass<FuncOp>(mlir::createCSEPass());
+
+  // // Legalize input types. We do this after flattening tuples so that we
+  // don't
+  // // have to deal with them.
+  // // TODO(nicolasvasilache): createLegalizeInputTypesPass is old and does not
+  // // handle region conversion properly (parent cloned before children).
+  // Revisit
+  // // when using ops with regions such as scf.for and linalg.generic.
+  // passManager.addPass(IREE::Flow::createLegalizeInputTypesPass());
 
   //----------------------------------------------------------------------------
   // Shape materialization for buffer assignment and stream formation.
@@ -167,12 +221,12 @@ void buildFlowTransformPassPipeline(OpPassManager &passManager) {
   passManager.addNestedPass<FuncOp>(
       Shape::createExpandFunctionDynamicDimsPass());
 
-  SmallVector<std::string> doNotRecurseOpNames = {"flow.dispatch.workgroups"};
-  passManager.addNestedPass<FuncOp>(
-      Shape::createTieDynamicShapesPass(doNotRecurseOpNames));
-  passManager.addNestedPass<FuncOp>(
-      Shape::createMaterializeShapeCalculationsPass());
-  passManager.addNestedPass<FuncOp>(Shape::createHoistShapeCalculationsPass());
+  // SmallVector<std::string> doNotRecurseOpNames =
+  // {"flow.dispatch.workgroups"}; passManager.addNestedPass<FuncOp>(
+  //     Shape::createTieDynamicShapesPass(doNotRecurseOpNames));
+  // passManager.addNestedPass<FuncOp>(
+  //     Shape::createMaterializeShapeCalculationsPass());
+  // passManager.addNestedPass<FuncOp>(Shape::createHoistShapeCalculationsPass());
 
   //----------------------------------------------------------------------------
   // Partitioning and dispatch region formation
@@ -193,14 +247,9 @@ void buildFlowTransformPassPipeline(OpPassManager &passManager) {
   //----------------------------------------------------------------------------
 
   // Convert into our expected input and (hopefully) some flow ops.
-  passManager.addNestedPass<FuncOp>(
-      IREE::Flow::createPrePartitioningConversionPass());
-  passManager.addNestedPass<FuncOp>(mlir::createCanonicalizerPass());
-
-  // TODO(benvanik): move up to input; requires pre-partitioning conversion
-  // to be reworked first.
-  passManager.addNestedPass<FuncOp>(
-      mlir::iree_compiler::createHLOToLinalgOnTensorsPass(true));
+  // passManager.addNestedPass<FuncOp>(
+  //     IREE::Flow::createPrePartitioningConversionPass());
+  // passManager.addNestedPass<FuncOp>(mlir::createCanonicalizerPass());
 
   if (clEnable1x1ConvToMatmul) {
     passManager.addNestedPass<FuncOp>(
@@ -239,6 +288,12 @@ void buildFlowTransformPassPipeline(OpPassManager &passManager) {
   // generalize executables to prune further (e.g. by promoting a dimension to
   // an argument if two executables differ only in that one dimension).
   passManager.addPass(IREE::Flow::createDeduplicateExecutablesPass());
+
+  // TODO: Prune and rename this pass. This runs after sending everything
+  // possible to the device and then legalizes any remaining h<->d loads,
+  // typically coming from top level flow control.
+  passManager.addNestedPass<FuncOp>(
+      IREE::Flow::createPrePartitioningConversionPass());
 
   // Create one function per remaining flow.executable that can be used with
   // iree-benchmark-module to benchmark each dispatch individually, as well as
