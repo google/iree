@@ -16,14 +16,14 @@
 #                                                                              #
 ################################################################################
 
-set(MOBILENETSSD_FP32_MODULE
-  "MobileNetSSD"                  # MODULE_NAME
-  "fp32"                          # MODULE_TAGS
-  "https://storage.googleapis.com/iree-model-artifacts/MobileNetSSD.tar.gz" # MLIR_SOURCE
-  "main"                          # ENTRY_FUNCTION
-  "1x320x320x3xf32"               # FUNCTION_INPUTS
-)
-
+#set(MOBILENETSSD_FP32_MODULE
+#  "MobileNetSSD"                  # MODULE_NAME
+#  "fp32"                          # MODULE_TAGS
+#  "https://storage.googleapis.com/iree-model-artifacts/MobileNetSSD.tar.gz" # MLIR_SOURCE
+#  "main"                          # ENTRY_FUNCTION
+#  "1x320x320x3xf32"               # FUNCTION_INPUTS
+#)
+#
 #set(MOBILENETV1_FP32_MODULE
 #  "MobileNetV1"                   # MODULE_NAME
 #  "fp32"                          # MODULE_TAGS
@@ -61,7 +61,7 @@ set(DEEPLABV3_FP32_MODULE
 # CPU, Dylib-Sync, big/little-core, full-inference
 iree_mlir_benchmark_suite(
   MODULES
-    ${MOBILENETSSD_FP32_MODULE}
+#    ${MOBILENETSSD_FP32_MODULE}
 #    ${MOBILENETV1_FP32_MODULE}
 #    ${POSENET_FP32_MODULE}
     ${DEEPLABV3_FP32_MODULE}
@@ -84,41 +84,41 @@ iree_mlir_benchmark_suite(
     "dylib-sync"
 )
 
-# CPU, Dylib, 1-thread, big/little-core, full-inference
-iree_mlir_benchmark_suite(
-  MODULES
-    ${MOBILENETSSD_FP32_MODULE}
-#    ${MOBILENETV1_FP32_MODULE}
-#    ${POSENET_FP32_MODULE}
-    ${DEEPLABV3_FP32_MODULE}
-
-  BENCHMARK_MODES
-    "1-thread,big-core,full-inference"
-    "1-thread,little-core,full-inference"
-  TARGET_BACKEND
-    "dylib-llvm-aot"
-  TARGET_ARCHITECTURE
-    "CPU-ARM64-v8A"
-  TRANSLATION_FLAGS
-    "--iree-input-type=tosa"
-    "--iree-llvm-target-triple=aarch64-none-linux-android29"
-    "--iree-flow-inline-constants-max-byte-length=2048"
-    # TODO(GH-5857): Enable this after fixing segfault.
-    #"--iree-flow-dispatch-formation-enable-operand-fusion"
-    "--iree-llvm-loop-unrolling=true"
-  DRIVER
-    "dylib"
-  RUNTIME_FLAGS
-    "--task_topology_group_count=1"
-)
-
-## GPU, Vulkan, Mali, full-inference
+## CPU, Dylib, 1-thread, big/little-core, full-inference
 #iree_mlir_benchmark_suite(
 #  MODULES
 #    ${MOBILENETSSD_FP32_MODULE}
 ##    ${MOBILENETV1_FP32_MODULE}
 ##    ${POSENET_FP32_MODULE}
-##    ${DEEPLABV3_FP32_MODULE}
+#    ${DEEPLABV3_FP32_MODULE}
+#
+#  BENCHMARK_MODES
+#    "1-thread,big-core,full-inference"
+#    "1-thread,little-core,full-inference"
+#  TARGET_BACKEND
+#    "dylib-llvm-aot"
+#  TARGET_ARCHITECTURE
+#    "CPU-ARM64-v8A"
+#  TRANSLATION_FLAGS
+#    "--iree-input-type=tosa"
+#    "--iree-llvm-target-triple=aarch64-none-linux-android29"
+#    "--iree-flow-inline-constants-max-byte-length=2048"
+#    # TODO(GH-5857): Enable this after fixing segfault.
+#    #"--iree-flow-dispatch-formation-enable-operand-fusion"
+#    "--iree-llvm-loop-unrolling=true"
+#  DRIVER
+#    "dylib"
+#  RUNTIME_FLAGS
+#    "--task_topology_group_count=1"
+#)
+
+## GPU, Vulkan, Mali, full-inference
+#iree_mlir_benchmark_suite(
+#  MODULES
+#    ${MOBILENETSSD_FP32_MODULE}
+#   ${MOBILENETV1_FP32_MODULE}
+#    ${POSENET_FP32_MODULE}
+#    ${DEEPLABV3_FP32_MODULE}
 #
 #  BENCHMARK_MODES
 #    "full-inference"
