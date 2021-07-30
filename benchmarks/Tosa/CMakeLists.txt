@@ -24,14 +24,14 @@ set(MOBILENETSSD_FP32_MODULE
   "1x320x320x3xf32"               # FUNCTION_INPUTS
 )
 
-set(MOBILENETV1_FP32_MODULE
-  "MobileNetV1"                   # MODULE_NAME
-  "fp32"                          # MODULE_TAGS
-  "https://storage.googleapis.com/iree-model-artifacts/MobileNetV1.tar.gz" # MLIR_SOURCE
-  "main"                          # ENTRY_FUNCTION
-  "1x224x224x3xf32"               # FUNCTION_INPUTS
-)
-
+#set(MOBILENETV1_FP32_MODULE
+#  "MobileNetV1"                   # MODULE_NAME
+#  "fp32"                          # MODULE_TAGS
+#  "https://storage.googleapis.com/iree-model-artifacts/MobileNetV1.tar.gz" # MLIR_SOURCE
+#  "main"                          # ENTRY_FUNCTION
+#  "1x224x224x3xf32"               # FUNCTION_INPUTS
+#)
+#
 #set(POSENET_FP32_MODULE
 #  "PoseNet"                       # MODULE_NAME
 #  "fp32"                          # MODULE_TAGS
@@ -39,15 +39,15 @@ set(MOBILENETV1_FP32_MODULE
 #  "main"                          # ENTRY_FUNCTION
 #  "1x353x257x3xf32"               # FUNCTION_INPUTS
 #)
-#
-#set(DEEPLABV3_FP32_MODULE
-#  "DeepLabV3"                     # MODULE_NAME
-#  "fp32"                          # MODULE_TAGS
-#  "https://storage.googleapis.com/iree-model-artifacts/DeepLabV3.tar.gz" # MLIR_SOURCE
-#  "main"                          # ENTRY_FUNCTION
-#  "1x257x257x3xf32"               # FUNCTION_INPUTS
-#)
-#
+
+set(DEEPLABV3_FP32_MODULE
+  "DeepLabV3"                     # MODULE_NAME
+  "fp32"                          # MODULE_TAGS
+  "https://storage.googleapis.com/iree-model-artifacts/DeepLabV3.tar.gz" # MLIR_SOURCE
+  "main"                          # ENTRY_FUNCTION
+  "1x257x257x3xf32"               # FUNCTION_INPUTS
+)
+
 ################################################################################
 #                                                                              #
 # Common benchmark configurations                                              #
@@ -62,9 +62,9 @@ set(MOBILENETV1_FP32_MODULE
 iree_mlir_benchmark_suite(
   MODULES
     ${MOBILENETSSD_FP32_MODULE}
-    ${MOBILENETV1_FP32_MODULE}
+#    ${MOBILENETV1_FP32_MODULE}
 #    ${POSENET_FP32_MODULE}
-#    ${DEEPLABV3_FP32_MODULE}
+    ${DEEPLABV3_FP32_MODULE}
 
   BENCHMARK_MODES
     "big-core,full-inference"
@@ -88,9 +88,9 @@ iree_mlir_benchmark_suite(
 iree_mlir_benchmark_suite(
   MODULES
     ${MOBILENETSSD_FP32_MODULE}
-    ${MOBILENETV1_FP32_MODULE}
+#    ${MOBILENETV1_FP32_MODULE}
 #    ${POSENET_FP32_MODULE}
-#    ${DEEPLABV3_FP32_MODULE}
+    ${DEEPLABV3_FP32_MODULE}
 
   BENCHMARK_MODES
     "1-thread,big-core,full-inference"
