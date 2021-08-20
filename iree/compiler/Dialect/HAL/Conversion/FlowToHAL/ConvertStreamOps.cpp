@@ -970,6 +970,9 @@ static Value splatFillPattern(Location loc, Value baseValue,
   baseValue = builder.createOrFold<BitcastOp>(
       loc, builder.getIntegerType(baseBitWidth), baseValue);
 
+  // Treat i1 as i8.
+  if (baseBitWidth == 1) baseBitWidth = 8;
+
   switch (baseBitWidth) {
     case 8: {
       // (v << 24) | (v << 16) | (v << 8) | v
