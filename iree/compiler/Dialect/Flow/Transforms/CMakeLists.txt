@@ -53,6 +53,7 @@ iree_cc_library(
     "StripAndSplatConstantVariables.cpp"
     "TypeConverter.cpp"
     "VerifyInputLegality.cpp"
+    "VerifyOutputLegality.cpp"
   DEPS
     ::PassesIncGen
     LLVMSupport
@@ -60,6 +61,7 @@ iree_cc_library(
     MLIRIR
     MLIRLinalg
     MLIRLinalgTransforms
+    MLIRMath
     MLIRMemRef
     MLIRMemRefTransforms
     MLIRPass
