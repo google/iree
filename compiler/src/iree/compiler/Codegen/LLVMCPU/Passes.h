@@ -19,6 +19,9 @@ namespace mlir::iree_compiler {
 
 class TilingConfig;
 
+#define GEN_PASS_DECL
+#include "iree/compiler/Codegen/LLVMCPU/Passes.h.inc" // IWYU pragma: keep
+
 /// Performs the final conversion to LLVM dialect.
 std::unique_ptr<OperationPass<ModuleOp>>
 createConvertToLLVMPass(bool reassociateFpReordering = false);
@@ -99,7 +102,7 @@ struct LLVMCPUVectorLoweringPassOptions {
 };
 
 std::unique_ptr<InterfacePass<mlir::FunctionOpInterface>>
-createLLVMCPUDropVectorUnitDimsPass();
+createLLVMCPUOptimizeVectorShapesPass();
 
 std::unique_ptr<InterfacePass<mlir::FunctionOpInterface>>
 createLLVMCPUVirtualVectorLoweringPass(std::string splitVectorTransfersTo = "",

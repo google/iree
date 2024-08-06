@@ -217,7 +217,7 @@ func.func @vectorize_fill_conv2d_generic() attributes {hal.executable.target = #
 //   CHECK-NOT:    linalg.fill
 //       CHECK:    vector.fma
 //   CHECK-NOT:    linalg.generic
-//       CHECK:    arith.cmpf olt, %{{.+}}, %{{.+}} : vector<4x4xf32>
+//       CHECK:    arith.cmpf olt, %{{.+}}, %{{.+}} : vector<16xf32>
 
 // -----
 

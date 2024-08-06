@@ -188,11 +188,11 @@ def LLVMCPUUnfuseFMAOps :
   let constructor = "mlir::iree_compiler::createLLVMCPUUnfuseFMAOpsPass()";
 }
 
-def LLVMCPUDropVectorUnitDims :
+def LLVMCPUOptimizeVectorShapes :
     InterfacePass<"iree-llvmcpu-drop-vector-unit-dims", "mlir::FunctionOpInterface"> {
   let summary = "Pass to drop vector unit dims.";
   let constructor =
-      "mlir::iree_compiler::createLLVMCPUDropVectorUnitDimsPass()";
+      "mlir::iree_compiler::createLLVMCPUOptimizeVectorShapesPass()";
 }
 
 def LLVMCPUVirtualVectorLowering :
@@ -213,6 +213,11 @@ def LLVMCPUVirtualVectorLowering :
   ];
   let constructor =
       "mlir::iree_compiler::createLLVMCPUVirtualVectorLoweringPass()";
+}
+
+def LLVMCPUVectorBitCastLoweringPass :
+    InterfacePass<"iree-llvmcpu-vector-bitcast-lowering", "mlir::FunctionOpInterface"> {
+  let summary = "Pass to unroll vector.bitcast ops to a sequence of 1D vector.bitcast ops";
 }
 
 def LLVMCPUVectorTransferLowering :
