@@ -346,6 +346,7 @@ void addCPUBufferOpsTileAndVectorizePipeline(
     options.enableVectorMasking = pipelineOpt.enableVectorMasking;
     options.vectorizeGatherAccesses = true;
     funcPassManager.addPass(createGenericVectorizationPass(options));
+    funcPassManager.addPass(createTopkLoweringPass());
     funcPassManager.addPass(createOptimizeTensorInsertExtractSlicesPass());
     funcPassManager.addPass(createCanonicalizerPass());
     funcPassManager.addPass(createCSEPass());
@@ -423,6 +424,7 @@ void addMultiTilingExpertPassPipeline(OpPassManager &funcPassManager,
     options.vectorizePadding = true;
     options.vectorizeGatherAccesses = true;
     funcPassManager.addPass(createGenericVectorizationPass(options));
+    funcPassManager.addPass(createTopkLoweringPass());
     funcPassManager.addPass(createOptimizeTensorInsertExtractSlicesPass());
     funcPassManager.addPass(createCanonicalizerPass());
     funcPassManager.addPass(createCSEPass());
@@ -482,6 +484,7 @@ void addConvTileAndDecomposeExpertPassPipeline(
     options.vectorizePadding = true;
     options.vectorizeGatherAccesses = true;
     funcPassManager.addPass(createGenericVectorizationPass(options));
+    funcPassManager.addPass(createTopkLoweringPass());
     funcPassManager.addPass(createOptimizeTensorInsertExtractSlicesPass());
     funcPassManager.addPass(createCanonicalizerPass());
     funcPassManager.addPass(createCSEPass());
@@ -530,6 +533,7 @@ void addMmt4dTilingExpertPassPipeline(OpPassManager &funcPassManager,
     options.vectorizePadding = true;
     options.vectorizeGatherAccesses = true;
     funcPassManager.addPass(createGenericVectorizationPass(options));
+    funcPassManager.addPass(createTopkLoweringPass());
     funcPassManager.addPass(createOptimizeTensorInsertExtractSlicesPass());
     funcPassManager.addPass(createCanonicalizerPass());
     funcPassManager.addPass(createCSEPass());
@@ -580,6 +584,7 @@ void addCPUDataTilingPipeline(OpPassManager &funcPassManager,
     options.vectorizePadding = true;
     options.enableVectorMasking = pipelineOpt.enableVectorMasking;
     funcPassManager.addPass(createGenericVectorizationPass(options));
+    funcPassManager.addPass(createTopkLoweringPass());
     funcPassManager.addPass(createOptimizeTensorInsertExtractSlicesPass());
     funcPassManager.addPass(createCanonicalizerPass());
     funcPassManager.addPass(createCSEPass());
@@ -621,6 +626,7 @@ void addCPULinalgExtTileAndVectorizePipeline(
     options.useConfiguredVectorSizes = pipelineOpt.useConfiguredVectorSizes;
     options.enableVectorMasking = pipelineOpt.enableVectorMasking;
     funcPassManager.addPass(createGenericVectorizationPass(options));
+    funcPassManager.addPass(createTopkLoweringPass());
     funcPassManager.addPass(createOptimizeTensorInsertExtractSlicesPass());
     funcPassManager.addPass(createCanonicalizerPass());
     funcPassManager.addPass(createCSEPass());
