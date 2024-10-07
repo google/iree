@@ -190,8 +190,16 @@ LogicalResult setTransferReadAnchor(ArrayRef<int64_t> workgroupSize,
     int64_t vectorSize = vectorShape[dim];
     // Set the element count for the innermost vector dimension.
     if (residualElements != 1) {
-      elementSizes[dim] = residualElements;
       vectorSize /= residualElements;
+      // residualElements = 1;
+      while (residualThreads % vectorSize != 0 &&
+             vectorSize % residualThreads != 0) {
+        if (residualElements == 1)
+          break;
+        residualElements >>= 1;
+        vectorSize <<= 1;
+      }
+      elementSizes[dim] = residualElements;
       residualElements = 1;
     }
 
@@ -268,8 +276,10 @@ struct LLVMGPUConfigureVectorLayoutsPass final
         func->getAttrOfType<IREE::GPU::MMAScheduleAttr>(scheduleAttrName);
     if (!scheduleAttr) {
       DictionaryAttr configDict = getTranslationInfo(func).getConfiguration();
-      scheduleAttr = dyn_cast_or_null<IREE::GPU::MMAScheduleAttr>(
-          configDict.get(scheduleAttrName));
+      if (configDict) {
+        scheduleAttr = dyn_cast_or_null<IREE::GPU::MMAScheduleAttr>(
+            configDict.get(scheduleAttrName));
+      }
     }
 
     // Vector layout option setter aimed at contractions. Currently this only
