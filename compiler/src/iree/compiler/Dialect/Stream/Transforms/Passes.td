@@ -13,6 +13,11 @@ include "mlir/Pass/PassBase.td"
 // Tensor lowering and resource management
 //===----------------------------------------------------------------------===//
 
+def SpecializeEncodingsPass :
+    Pass<"iree-stream-specialize-encodings", "mlir::ModuleOp"> {
+  let summary = "Attach optional array of targets to encodings.";
+}
+
 def ConvertToStreamPass :
     Pass<"iree-stream-conversion", "mlir::ModuleOp"> {
   let summary = "Converts from flow and other input dialects into the stream dialect.";
@@ -68,6 +73,7 @@ def EncodeHostTensorsPass :
     to preserve behavior while lowering into the type-erased forms.
   }];
   let dependentDialects = [
+    "mlir::affine::AffineDialect",
     "mlir::arith::ArithDialect",
     "mlir::complex::ComplexDialect",
     "IREE::Stream::StreamDialect",

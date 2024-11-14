@@ -19,12 +19,16 @@
 
 // clang-format off
 #include "iree/compiler/Dialect/Encoding/IR/EncodingEnums.h.inc" // IWYU pragma: export
+#include "iree/compiler/Dialect/Encoding/IR/EncodingInterfaces.h.inc" // IWYU pragma: export
 #define GET_ATTRDEF_CLASSES
 #include "iree/compiler/Dialect/Encoding/IR/EncodingAttrs.h.inc" // IWYU pragma: export
 #undef GET_ATTRDEF_CLASSES
 #define GET_TYPEDEF_CLASSES
 #include "iree/compiler/Dialect/Encoding/IR/EncodingTypes.h.inc" // IWYU pragma: export
 #undef GET_TYPEDEF_CLASSES
+// The EncodingTypeInterfaces.h.inc needs to be included after EncodingAttrs
+// because an interface method could have EncodingAttr types.
+#include "iree/compiler/Dialect/Encoding/IR/EncodingTypeInterfaces.h.inc" // IWYU pragma: export
 // clang-format on
 
 //===---------------------------------------------------------------------===//
