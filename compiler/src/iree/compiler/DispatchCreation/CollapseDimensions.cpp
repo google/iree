@@ -121,36 +121,47 @@ static SmallVector<ReassociationIndices> getCollapsibleLoops(Operation *op) {
            (rDimsSet.count(prePos) && rDimsSet.count(nextPos));
   };
 
-  ReassociationIndices range;
-  AffineExpr preExpr;
-  // Find the largest sequence of dimensions that are
-  // - Either preserved in all maps, or
-  // - are completely absent
-  // This sequence can be collapsed. To find the sequence,
-  // 1) Take the result expressions of one of the indexing maps
-  // 2) Find a sequence of 2 that is found in all maps
-  // 3) Then take last element of this sequence and the next
-  //    result expression, and check if this sequence of 2 is
-  //    found in all maps. If so, add to sequence (to get a sequence of 3)
-  //    and repeat till the last element of sequence and the next result
-  //    expression is not found as a sequence in all maps.
-  for (auto nextExpr :
-       fusionInterfaceOp.getIndexingMapsArray().front().getResults()) {
-    unsigned position = cast<AffineDimExpr>(nextExpr).getPosition();
-    if (!range.empty()) {
-      if (!hasAllMapsSameSequence(preExpr, nextExpr) ||
-          !hasSameIteratorType(preExpr, nextExpr)) {
-        if (range.size() > 1) {
-          contiguousLoops.push_back({range.begin(), range.end()});
-        }
-        range.clear();
+  SmallVector<bool> seenLoop(fusionInterfaceOp.getNumLoops(), false);
+  for (AffineMap indexingMap : fusionInterfaceOp.getIndexingMapsArray()) {
+    ReassociationIndices range;
+    AffineExpr preExpr;
+
+    auto clearRange = [&]() {
+      if (range.size() > 1) {
+        contiguousLoops.push_back(range);
       }
+      range.clear();
+    };
+
+    // Find the largest sequence of dimensions that are
+    // - Either preserved in all maps, or
+    // - are completely absent
+    // This sequence can be collapsed. To find the sequence,
+    // 1) Take the result expressions of one of the indexing maps
+    // 2) Find a sequence of 2 that is found in all maps
+    // 3) Then take last element of this sequence and the next
+    //    result expression, and check if this sequence of 2 is
+    //    found in all maps. If so, add to sequence (to get a sequence of 3)
+    //    and repeat till the last element of sequence and the next result
+    //    expression is not found as a sequence in all maps.
+    for (AffineExpr nextExpr : indexingMap.getResults()) {
+      unsigned position = cast<AffineDimExpr>(nextExpr).getPosition();
+      if (seenLoop[position]) {
+        clearRange();
+        continue;
+      }
+
+      if (!range.empty()) {
+        if (!hasAllMapsSameSequence(preExpr, nextExpr) ||
+            !hasSameIteratorType(preExpr, nextExpr)) {
+          clearRange();
+        }
+      }
+      range.push_back(position);
+      seenLoop[position] = true;
+      preExpr = nextExpr;
     }
-    range.push_back(position);
-    preExpr = nextExpr;
-  }
-  if (range.size() > 1) {
-    contiguousLoops.push_back(range);
+    clearRange();
   }
 
   return contiguousLoops;
@@ -164,13 +175,6 @@ static bool isEligibleForCollapse(Operation *op) {
 
   auto genericOp = dyn_cast<linalg::GenericOp>(op);
   if (!genericOp) {
-    return false;
-  }
-
-  // TODO(guray) There is no mechanism to tell the collapsed indexes to
-  // `tensor.expand_shape`. Once we have this support in MLIR, we can enable
-  // dynamic tensor shapes.
-  if (genericOp.hasDynamicShape()) {
     return false;
   }
 
@@ -474,10 +478,17 @@ bool CollapseInfo::updateFromConsumer(OpOperand *operand,
     }
   }
 
-  // Remove all collapsable loops in `producer` that are not collapsable in
-  // `consumer` (set intersect)
-  bool didChange = collapsableLoops.remove_if(
-      [&](long elem) -> bool { return !consumerCollapsable.contains(elem); });
+  // Remove all collapsable loops in `producer` that are present and not
+  // collapsable in `consumer` (set subtract).
+  bool didChange = collapsableLoops.remove_if([&](long elem) -> bool {
+    if (consumerCollapsable.contains(elem)) {
+      return false;
+    }
+    if (!consumerToProducerMap->isFunctionOfDim(elem)) {
+      return false;
+    }
+    return true;
+  });
 
   // Now update the reassociation indicies given the updated `collapsableLoops`
   // and `consumerCollapsableMap`.
@@ -516,12 +527,16 @@ bool CollapseInfo::updateFromConsumer(OpOperand *operand,
         }
         newIndicies.clear();
         collapseIntoIdx = kUninitialized;
+      } else if (!consumerCollapseMap.contains(index)) {
+        // (2) `index` is not present in consumer, so it is collapsable and can
+        // be collapsed into `collapseIntoIndex`.
+        newIndicies.push_back(index);
       } else if (collapseIntoIdx == kUninitialized) {
-        // (2) First occurance of collapsable loop, set collapseIntoIdx.
+        // (3) First occurance of collapsable loop, set collapseIntoIdx.
         collapseIntoIdx = consumerCollapseMap.at(index);
         newIndicies.push_back(index);
       } else if (consumerCollapseMap.at(index) != collapseIntoIdx) {
-        // (3) `index` is collapsable but not collapsable into the other loops.
+        // (5) `index` is collapsable but not collapsable into the other loops.
         // So, split them and look for other loops to collapse `index` into.
         didChange = true;
         if (newIndicies.size() > 1) {
@@ -531,7 +546,7 @@ bool CollapseInfo::updateFromConsumer(OpOperand *operand,
         collapseIntoIdx = consumerCollapseMap[index];
         newIndicies.push_back(index);
       } else {
-        // (4) `index` is collapsable and can be collapsed into
+        // (6) `index` is collapsable and can be collapsed into
         // `collapseIntoIndex`.
         newIndicies.push_back(index);
       }
@@ -655,12 +670,15 @@ hoistTensorReshapesOutOfDispatchRegion(
   SmallVector<SmallVector<ReassociationIndices>> allReassociationIndices;
   ValueRange dynamicDimsList = dispatchOp.getResultDims();
   Location loc = dispatchOp.getLoc();
-  for (Value yieldedValue : returnOp->getOperands()) {
+  for (auto [resultIndex, yieldedValue] :
+       llvm::enumerate(returnOp->getOperands())) {
     auto expandShapeOp = yieldedValue.getDefiningOp<tensor::ExpandShapeOp>();
     if (!expandShapeOp) {
       // 4a. Keep the same yield value if the producer is not a
       // `tensor.expand_shape` op.
       newReturnTypes.push_back(yieldedValue.getType());
+      ValueRange resultDims = dispatchOp.getResultDynamicDims(resultIndex);
+      newDynamicDims.append(resultDims.begin(), resultDims.end());
       newYieldVals.push_back(yieldedValue);
       continue;
     }
@@ -745,9 +763,24 @@ hoistTensorReshapesOutOfDispatchRegion(
       rewriter.replaceAllUsesWith(origResult, returnValue);
       continue;
     }
+
+    auto shapedType = dyn_cast<ShapedType>(origResult.getType());
+    assert(shapedType && "result should be shaped type");
+
+    SmallVector<OpFoldResult> outputShape;
+    ValueRange dynamicDims = dispatchOp.getResultDynamicDims(index);
+    for (int64_t dim : shapedType.getShape()) {
+      if (ShapedType::isDynamic(dim)) {
+        outputShape.push_back(dynamicDims.front());
+        dynamicDims.drop_front();
+        continue;
+      }
+      outputShape.push_back(rewriter.getIndexAttr(dim));
+    }
+
     auto newExpandShapeOp = rewriter.create<tensor::ExpandShapeOp>(
         loc, origResult.getType(), returnValue,
-        allReassociationIndicesRef.front());
+        allReassociationIndicesRef.front(), outputShape);
     allReassociationIndicesRef = allReassociationIndicesRef.drop_front();
     rewriter.replaceAllUsesWith(origResult, newExpandShapeOp.getResult());
   }
@@ -902,6 +935,11 @@ collapseDimensionsForDispatch(IRRewriter &rewriter,
     // don't collapse any ops in this dispatch.
     iterationCount++;
     if (iterationCount > maxIterations) {
+      LLVM_DEBUG({
+        llvm::dbgs()
+            << "[CollapseDims] : Producer/Consumer updates did not converge in "
+            << maxIterations << " iterations. Skipping...\n";
+      });
       return false;
     }
     // Step 4. For each producer, reduce the number of collapsed dimensions
@@ -938,12 +976,25 @@ collapseDimensionsForDispatch(IRRewriter &rewriter,
     });
   }
 
+  LLVM_DEBUG({
+    llvm::dbgs()
+        << "[CollapseDims] : Updated Producers/Consumers successfully\n";
+  });
+
   bool didCollapse = false;
 
   // Step 6. Collapse dimensions based on each op's CollapseInfo
   for (auto &[opToCollapse, info] : opMap) {
     OpBuilder::InsertionGuard g(rewriter);
     rewriter.setInsertionPoint(opToCollapse);
+
+    LLVM_DEBUG({
+      llvm::dbgs() << "[CollapseDims] : Trying to collapse dimensions for:\n";
+      info.print(llvm::dbgs());
+      llvm::dbgs() << "\n";
+      opToCollapse->print(llvm::dbgs());
+      llvm::dbgs() << "\n";
+    });
 
     using ResultsType = FailureOr<SmallVector<Value>>;
     auto maybeReplacements =
@@ -973,6 +1024,10 @@ collapseDimensionsForDispatch(IRRewriter &rewriter,
               return failure();
             });
     if (failed(maybeReplacements)) {
+      LLVM_DEBUG({
+        llvm::dbgs() << "[CollapseDims] : Failed to collapse dimensions for "
+                        "operation\n";
+      });
       continue;
     }
     didCollapse = true;
