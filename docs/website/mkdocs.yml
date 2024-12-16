@@ -188,6 +188,7 @@ nav:
           # Dialects from llvm-external-projects/iree-dialects/
           - "Public dialects":
               - IREEInput: "reference/mlir-dialects/IREEInput.md"
+      - "Compiler passes": "reference/Passes.md"
       - "Other topics":
           - Glossary: "reference/glossary.md"
           - Optimization options: "reference/optimization-options.md"
@@ -251,6 +252,9 @@ plugins:
       post_url_date_format: yyyy-MM-dd
       post_url_format: "{date}-{slug}"
 
+  # https://github.com/mondeja/mkdocs-include-markdown-plugin
+  - include-markdown
+
   # https://squidfunk.github.io/mkdocs-material/setup/setting-up-site-search/
   - search
 
@@ -296,3 +300,7 @@ plugins:
         # "Developers" section was added
         "guides/developer-tips.md": "developers/general/developer-tips.md"
         "developers/building/cmake-options-and-variables.md": "developers/building/cmake-options.md"
+
+validation:
+  nav:
+    omitted_files: info
