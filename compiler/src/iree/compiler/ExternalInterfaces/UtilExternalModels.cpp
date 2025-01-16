@@ -12,6 +12,7 @@
 #include "iree/compiler/Dialect/Encoding/IR/EncodingOps.h"
 #include "iree/compiler/Dialect/LinalgExt/IR/LinalgExtDialect.h"
 #include "iree/compiler/Dialect/LinalgExt/IR/LinalgExtOps.h"
+#include "iree/compiler/Dialect/LinalgExt/Utils/Utils.h"
 #include "iree/compiler/Dialect/Util/IR/UtilTypes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -325,7 +326,7 @@ struct HoistableLinalgOpInterface
         }
       }
     }
-    return !linalg::isaFillOpInterface(genericOp).has_value();
+    return !IREE::LinalgExt::isFillLikeOp(genericOp);
   }
   bool isAtomicallyHoistableOp(Operation *) const { return true; }
   bool isOperandHoistable(Operation *, OpOperand *) const { return true; }

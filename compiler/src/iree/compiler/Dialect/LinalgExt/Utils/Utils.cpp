@@ -14,6 +14,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/Transforms/RegionUtils.h"
 
 namespace mlir::iree_compiler::IREE::LinalgExt {
 
@@ -361,6 +362,25 @@ bool isGatherlikeOp(Operation *op) {
   }
 
   return true;
+}
+
+bool isFillLikeOp(linalg::GenericOp linalgOp) {
+  // Check if there are any non-scalar inputs or non-scalar captures in the
+  // region.
+  for (Value input : linalgOp.getDpsInputs()) {
+    if (isa<ShapedType>(input.getType())) {
+      return false;
+    }
+  }
+
+  bool foundNonScalar = false;
+  visitUsedValuesDefinedAbove(linalgOp.getRegion(), [&](OpOperand *operand) {
+    if (isa<ShapedType>(operand->get().getType())) {
+      foundNonScalar = true;
+    }
+  });
+
+  return !foundNonScalar;
 }
 
 FailureOr<SmallVector<AffineMap>>
