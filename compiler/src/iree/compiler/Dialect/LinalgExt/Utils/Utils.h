@@ -195,5 +195,9 @@ bool isBroadcastingOp(linalg::LinalgOp op);
 ///     2. `linalg.yield` consumes the result of a `tensor.extract_slice`
 bool isGatherlikeOp(Operation *op);
 
+/// Returns true if the operation is a GenericOp that has no tensor inputs,
+/// either as inputs or as implicit captures.
+bool isFillLikeOp(linalg::GenericOp op);
+
 } // namespace mlir::iree_compiler::IREE::LinalgExt
 #endif // IREE_COMPILER_DIALECT_LINALGEXT_UTILS_UTILS_H_
