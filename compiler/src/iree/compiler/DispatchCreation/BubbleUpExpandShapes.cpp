@@ -117,6 +117,37 @@ struct BubbleExpandThroughExtract final
 
 } // namespace
 
+/// If the domain of the operation is being expanded by unit dimensions, check
+/// if it's possible to have an infinite loop where the unit dim expansion keeps
+/// on propagating infinitely.
+static bool canCauseReshapingLoopByExpansion(Operation *producer,
+                                             Operation *consumer) {
+  bool isExpandingToUnitDims = false;
+  if (auto expandShapeOp = dyn_cast<tensor::ExpandShapeOp>(consumer)) {
+    // If the expand_shape is only expanding unit dimensions and the producer
+    // has multiple results, there is a possibility of an infinite loop.
+    ArrayRef<int64_t> outputShape = expandShapeOp.getStaticOutputShape();
+    for (auto [idx, indices] :
+         llvm::enumerate(expandShapeOp.getReassociationIndices())) {
+      if (indices.size() == 1) {
+        continue;
+      }
+      // Check if the output shape at any of the reassociation indices is 1.
+      for (int64_t ind : indices) {
+        if (outputShape[ind] == 1) {
+          isExpandingToUnitDims = true;
+        }
+      }
+    }
+
+    if (isExpandingToUnitDims && producer->getNumResults() > 1) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void BubbleUpExpandShapesPass::runOnOperation() {
   MLIRContext *context = &getContext();
 
@@ -129,16 +160,18 @@ void BubbleUpExpandShapesPass::runOnOperation() {
           return false;
         }
 
+        if (canCauseReshapingLoopByExpansion(producer, consumer)) {
+          return false;
+        }
+
         // Do not fuse by expand if consumer is dequant.
         if (IREE::LinalgExt::isBitExtendOp(consumer)) {
           return false;
         }
 
-        // Do not fuse producer generic op if it has more than one user
-        // or any reduction iterators.
+        // Do not fuse producer generic op if it has any reduction iterators.
         if (auto producerGenericOp = dyn_cast<linalg::GenericOp>(producer)) {
-          return producerGenericOp->hasOneUse() &&
-                 llvm::all_of(producerGenericOp.getIteratorTypesArray(),
+          return llvm::all_of(producerGenericOp.getIteratorTypesArray(),
                               linalg::isParallelIterator);
         }
 
@@ -206,6 +239,10 @@ void BubbleUpExpandShapesPass::runOnOperation() {
   bubbleExpandShapePatterns.insert<BubbleExpandThroughExtract>(context);
   tensor::ExpandShapeOp::getCanonicalizationPatterns(bubbleExpandShapePatterns,
                                                      context);
+  tensor::DimOp::getCanonicalizationPatterns(bubbleExpandShapePatterns,
+                                             context);
+  tensor::EmptyOp::getCanonicalizationPatterns(bubbleExpandShapePatterns,
+                                               context);
 
   GreedyRewriteConfig rewriteConfig;
   rewriteConfig.maxIterations = GreedyRewriteConfig::kNoLimit;
