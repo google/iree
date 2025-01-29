@@ -74,6 +74,12 @@ static llvm::cl::opt<bool> clLLVMGPUEnableSharedMemoryReuse(
         "Enable shared memory reuse in the vector distribute pipeline"),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool> clLLVMGPUEnableExperimentalDataTiling(
+    "iree-llvmgpu-experimental-data-tiling",
+    llvm::cl::desc("Enables late data-tiling materialization for LLVMGPU "
+                   "(experimental)."),
+    llvm::cl::init(false));
+
 //===----------------------------------------------------------------------===//
 // Bufferization Configuration
 //===----------------------------------------------------------------------===//
@@ -1155,6 +1161,9 @@ static void buildLLVMGPUCodegenConfigurationPassPipelineImpl(
     OpPassManager &modulePassManager) {
   {
     FunctionLikeNest funcPassManager(modulePassManager);
+    if (clLLVMGPUEnableExperimentalDataTiling) {
+      funcPassManager.addPass(createMaterializeDeviceEncodingPass);
+    }
     funcPassManager.addPass(createGPUGeneralizeNamedOpsPass);
     addCommonTargetExecutablePreprocessingPasses(funcPassManager);
     addEncodingToNopPasses(funcPassManager);
@@ -1231,6 +1240,9 @@ static void buildROCDLCodegenConfigurationPassPipelineImpl(
     OpPassManager &modulePassManager) {
   {
     FunctionLikeNest funcPassManager(modulePassManager);
+    if (clLLVMGPUEnableExperimentalDataTiling) {
+      funcPassManager.addPass(createMaterializeDeviceEncodingPass);
+    }
     funcPassManager.addPass(createGPUGeneralizeNamedOpsPass);
     addCommonTargetExecutablePreprocessingPasses(funcPassManager);
   }
