@@ -89,14 +89,16 @@ findOrCreateSubspanBuffer(RewriterBase &rewriter,
   Value byteOffset = subspanOp.getByteOffset();
   MemRefLayoutAttrInterface layoutAttr = {};
   if (byteOffset && !matchPattern(byteOffset, m_Zero())) {
-    OpFoldResult elementOffset = convertByteOffsetToElementOffset(
-        rewriter, subspanOp->getLoc(), subspanOp.getByteOffset(),
-        shapedType.getBoundElementType());
-    std::optional<int64_t> elementOffsetInt =
-        getConstantIntValue(elementOffset);
-    if (!elementOffsetInt) {
-      elementOffsetInt = ShapedType::kDynamic;
-    }
+    // OpFoldResult elementOffset = convertByteOffsetToElementOffset(
+    //     rewriter, subspanOp->getLoc(), subspanOp.getByteOffset(),
+    //     shapedType.getBoundElementType());
+
+    // std::optional<int64_t> elementOffsetInt =
+    //     getConstantIntValue(elementOffset);
+    // if (!elementOffsetInt) {
+    //   elementOffsetInt = ShapedType::kDynamic;
+    // }
+    std::optional<int64_t> elementOffsetInt = ShapedType::kDynamic;
     auto tensorType = llvm::cast<RankedTensorType>(shapedType.getBoundType());
     SmallVector<int64_t> strides = getStridesFromShape(tensorType.getShape());
     layoutAttr = StridedLayoutAttr::get(rewriter.getContext(),
