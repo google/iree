@@ -19,6 +19,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FormatVariadic.h"
+#include "mlir/Dialect/AMDGPU/IR/AMDGPUDialect.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Arith/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -284,11 +285,11 @@ struct ConvertBf16ToUInt16BuffersPass final
           });
 
       // Support the list of all vector operations that do not perform numerical
-      // changes:
+      // changes. Also handle amdgpu buffer casts:
       target.addDynamicallyLegalOp<
-          vector::BroadcastOp, vector::ShuffleOp, vector::ExtractElementOp,
-          vector::ExtractOp, vector::InsertElementOp, vector::InsertOp,
-          vector::ScalableInsertOp, vector::ScalableExtractOp,
+          amdgpu::FatRawBufferCastOp, vector::BroadcastOp, vector::ShuffleOp,
+          vector::ExtractElementOp, vector::ExtractOp, vector::InsertElementOp,
+          vector::InsertOp, vector::ScalableInsertOp, vector::ScalableExtractOp,
           vector::InsertStridedSliceOp, vector::ExtractStridedSliceOp,
           vector::TransferReadOp, vector::TransferWriteOp, vector::LoadOp,
           vector::StoreOp, vector::MaskedLoadOp, vector::MaskedStoreOp,
