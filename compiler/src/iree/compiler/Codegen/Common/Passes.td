@@ -530,10 +530,9 @@ def PolynomialApproximationPass :
     Pass<"iree-codegen-polynomial-approximation", ""> {
   let summary = "Convert math operations to their polynomial approximation";
   let options = [
-    ListOption<"noApproxOps", "no-approx-ops", "std::string",
-           [{List of operations that should not be approximated.\n"
-           "As of now, possible options are:\n"
-           "\ttan, sinh, cosh, asinh, acosh, atanh, powf, fpowf, erf\n}]>,
+    ListOption<"expandOps", "expand-ops", "std::string", [{Comma-separated list of ops to apply rewrites into other math functions (other than polynomial approximations).}]>,
+    ListOption<"f32ExpandOps", "f32-expand-ops", "std::string", [{Comma-separated list of ops whose operands to expand to f32.}]>,
+    ListOption<"approxOps", "approx-ops", "std::string", [{Comma-separated list of op to rewrite as polynomial approximations.}]>,
   ];
 }
 

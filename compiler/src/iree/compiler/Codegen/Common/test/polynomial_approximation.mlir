@@ -1,4 +1,4 @@
-// RUN: iree-opt --iree-codegen-polynomial-approximation --split-input-file %s | FileCheck %s
+// RUN: iree-opt --pass-pipeline='builtin.module(func.func(iree-codegen-polynomial-approximation{expand-ops={pow,tan}}))' --split-input-file %s | FileCheck %s
 
 // CHECK-LABEL: @polynomial_tan
 func.func @polynomial_tan(%arg0: f32) -> f32 {
