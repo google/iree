@@ -17,8 +17,9 @@ namespace mlir::iree_compiler {
 /// approximation.
 static llvm::cl::opt<bool> clNativeMathPrecision(
     "iree-codegen-gpu-native-math-precision",
-    llvm::cl::desc(
-        "Skip polynomial lowering for math op natively available on GPU"),
+    llvm::cl::desc("Deprecated! This flag had buggy/unintentional semantics. "
+                   "Its original description said: \"Skip polynomial lowering "
+                   "for math op natively available on GPU.\""),
     llvm::cl::init(false));
 
 #define GEN_PASS_DEF_POLYNOMIALAPPROXIMATIONPASS
@@ -26,12 +27,49 @@ static llvm::cl::opt<bool> clNativeMathPrecision(
 
 namespace {
 
+#if 0
 static void populateErfPattern(RewritePatternSet &patterns) {
   if (clNativeMathPrecision) {
     patterns.add<math::ErfPolynomialApproximation>(patterns.getContext());
   } else {
     populateExpandExp2FPattern(patterns);
     populateMathPolynomialApproximationPatterns(patterns);
+    populateExpandRoundEvenPattern(patterns);
+  }
+}
+#endif
+
+static void populateMathFunctionsExpandPatterns(
+    RewritePatternSet &patterns,
+    const std::function<bool(StringRef)> &predicate) {
+  if (predicate("tan")) {
+    populateExpandTanPattern(patterns);
+  }
+  if (predicate("sinh")) {
+    populateExpandSinhPattern(patterns);
+  }
+  if (predicate("cosh")) {
+    populateExpandCoshPattern(patterns);
+  }
+  if (predicate("asinh")) {
+    populateExpandAsinhPattern(patterns);
+  }
+  if (predicate("acosh")) {
+    populateExpandAcoshPattern(patterns);
+  }
+  if (predicate("atanh")) {
+    populateExpandAtanhPattern(patterns);
+  }
+  if (predicate("powf")) {
+    populateExpandPowFPattern(patterns);
+  }
+  if (predicate("fpowi")) {
+    populateExpandFPowIPattern(patterns);
+  }
+  if (predicate("exp2")) {
+    populateExpandExp2FPattern(patterns);
+  }
+  if (predicate("roundeven")) {
     populateExpandRoundEvenPattern(patterns);
   }
 }
@@ -43,32 +81,64 @@ class PolynomialApproximationPass final
 public:
   using Base::Base;
 
+  LogicalResult initializeOptions(
+      StringRef options,
+      function_ref<LogicalResult(const Twine &)> errorHandler) override {
+    llvm::dbgs() << "XXXXXXXXXXXXXXXXXXXXXXXX initializeOptions sees "
+                 << expandOps.ValueStr << "\n";
+    llvm::dbgs() << "XXXXXXXXXXXXXXXXXXXXXXXX initializeOptions gets options: "
+                 << options << "\n";
+
+    LogicalResult result = Pass::initializeOptions(options, errorHandler);
+    llvm::dbgs() << "XXXXXXXXXXXXXXXXXXXXXXXX initializeOptions sees "
+                 << expandOps.ValueStr << "\n";
+
+    return result;
+  }
+
   void runOnOperation() override {
-    using PatternFunction = llvm::function_ref<void(RewritePatternSet &)>;
-    // Order matters here.
-    llvm::SmallVector<std::pair<StringRef, PatternFunction>> patternMap = {
-        {"tan", populateExpandTanPattern},
-        {"sinh", populateExpandSinhPattern},
-        {"cosh", populateExpandCoshPattern},
-        {"asinh", populateExpandAsinhPattern},
-        {"acosh", populateExpandAcoshPattern},
-        {"atanh", populateExpandAtanhPattern},
-        {"powf", populateExpandPowFPattern},
-        {"fpowi", populateExpandFPowIPattern},
-        {"erf", populateErfPattern},
-    };
+    RewritePatternSet patterns(&getContext());
+    llvm::dbgs() << "XXXXXXXXXXXXXXXXXXXXXXXX" << expandOps.ValueStr << "\n";
 
-    RewritePatternSet mathPatterns(&getContext());
-
-    for (const auto &[fnName, populateFn] : patternMap) {
-      // Skip any ops in the "do not convert" list.
-      if (!llvm::is_contained(noApproxOps, fnName)) {
-        populateFn(mathPatterns);
+    auto mathFunctionExpansion = [=](StringRef name) {
+      // TODO(bjacob): this weird `if` statement is for compatibility only.
+      // Remove when legacy `clNativeMathPrecision` is dropped.
+      if (clNativeMathPrecision) {
+        if (name == "exp2" || name == "roundeven") {
+          return false;
+        }
       }
-    }
+      return llvm::is_contained(expandOps, name);
+    };
+    populateMathFunctionsExpandPatterns(patterns, mathFunctionExpansion);
 
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(mathPatterns)))) {
+    auto predicateF32Expansion = [=](StringRef name) {
+      // TODO(bjacob): this weird `if` statement is for compatibility only.
+      // Remove when legacy `clNativeMathPrecision` is dropped.
+      if (clNativeMathPrecision) {
+        return false;
+      }
+      return llvm::is_contained(f32ExpandOps, name);
+      /*
+      name == "atan" || name == "atan2" || name == "tanh" ||
+          name == "log" || name == "log2" || name == "log1p" ||
+          name == "erf" || name == "exp" || name == "expm1" ||
+          name == "cbrt" || name == "sin" || name == "cos"; */
+    };
+    populateMathF32ExpansionPatterns(patterns, predicateF32Expansion);
+
+    auto predicateApprox = [=](StringRef name) {
+      return llvm::is_contained(approxOps, name);
+      /*
+          return name == "atan" || name == "atan2" || name == "tanh" ||
+           name == "log" || name == "log2" || name == "log1p" ||
+           name == "erf" || name == "asin" || name == "acos" || name == "exp" ||
+           name == "expm1" || name == "cbrt" || name == "sin" || name == "cos";
+       */
+    };
+    populateMathPolynomialApproximationPatterns(patterns, predicateApprox);
+
+    if (failed(applyPatternsGreedily(getOperation(), std::move(patterns)))) {
       return signalPassFailure();
     }
   }

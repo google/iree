@@ -699,7 +699,18 @@ static void addLowerToLLVMPasses(OpPassManager &modulePassManager,
       // Handle complex operation conversion.
       .addPass(createConvertComplexToStandardPass)
       // math dialect elementry functions -> polynomial form.
-      .addPass(createPolynomialApproximationPass)
+      .addPass([] {
+        PolynomialApproximationPassOptions options;
+        options.expandOps = {"tan",   "sinh", "cosh",  "asinh", "acosh",
+                             "atanh", "powf", "fpowi", "exp2",  "roundeven"};
+        options.f32ExpandOps = {"atan",  "atan2", "tanh", "log",
+                                "log2",  "log1p", "erf",  "exp",
+                                "expm1", "cbrt",  "sin",  "cos"};
+        options.approxOps = {"atan",  "atan2", "tanh", "log",  "log2",
+                             "log1p", "erf",   "asin", "acos", "exp",
+                             "expm1", "cbrt",  "sin",  "cos"};
+        return createPolynomialApproximationPass(options);
+      })
       .addPass(createHoistStaticallyBoundAllocationsPass)
       // Use `arith.minf/maxf` instead of `arith.minimumf/maximumf`.
       .addPredicatedPass(clUseFastMinMaxOps, createReplaceSlowMinMaxOpsPass);
